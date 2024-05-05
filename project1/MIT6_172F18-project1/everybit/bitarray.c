@@ -31,6 +31,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "lut.h"
 
 #include <sys/types.h>
 
@@ -206,18 +207,33 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
   {
     return;
   }
+  size_t start_byte = bit_offset / 8;
+  size_t end_byte = (bit_offset + bit_length - 1) / 8;
 
-  assert(bit_offset + bit_length <= bitarray -> bit_sz);
-  size_t start = bit_offset;
-  size_t end = bit_offset + bit_length - 1;
-  while(start < end)
+  // Reverse bytes where full byte reversal is possible
+  while(start_byte < end_byte) 
   {
-    size_t bit1 = bitarray_get(bitarray, start);
-    size_t bit2 = bitarray_get(bitarray, end);
-    bitarray_set(bitarray, start, bit2);
-    bitarray_set(bitarray, end, bit1);
-    start++;
-    end--;
+      uint8_t temp = REVERSE_BYTE_LOOKUP[bitarray -> buf[start_byte]];
+      bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP[bitarray -> buf[end_byte]];
+      bitarray -> buf[end_byte] = temp;
+      start_byte++;
+      end_byte--;
+  }
+
+  // If reversing within a single byte
+  if (start_byte == end_byte) 
+  {
+      size_t start = bit_offset;
+      size_t end = bit_offset + bit_length - 1;
+      while(start < end)
+      {
+        size_t bit1 = bitarray_get(bitarray, start);
+        size_t bit2 = bitarray_get(bitarray, end);
+        bitarray_set(bitarray, start, bit2);
+        bitarray_set(bitarray, end, bit1);
+        start++;
+        end--;
+      }
   }
 
   //DEBUGING
@@ -305,7 +321,7 @@ void bitarray_print(const bitarray_t* const bitarray)
         return;
     }
 
-    printf("bitarray (%ld bits): ", bitarray->bit_sz);
+    //printf("bitarray (%ld bits): ", bitarray->bit_sz);
     for (size_t i = 0; i < bitarray->bit_sz; i++) 
     {
         // Print each bit. Note that bitarray_get already handles bit packing.
@@ -315,5 +331,5 @@ void bitarray_print(const bitarray_t* const bitarray)
             printf(" "); // Add a space every 8 bits for easier reading
         }
     }
-    printf("\n");
+    //printf("\n");
 }
