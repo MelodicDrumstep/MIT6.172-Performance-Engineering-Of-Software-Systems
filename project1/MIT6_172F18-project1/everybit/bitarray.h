@@ -33,6 +33,8 @@ typedef struct bitarray bitarray_t;
 
 // ******************************* Prototypes *******************************
 
+void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length);
+
 // Allocates space for a new bit array.
 // bit_sz is the number of bits storable in the resultant bit array
 bitarray_t* bitarray_new(const size_t bit_sz);

@@ -29,10 +29,13 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include <sys/types.h>
 
+
+//#define DEBUG
 
 // ********************************* Types **********************************
 
@@ -108,9 +111,12 @@ static size_t modulo(const ssize_t n, const size_t m);
 static char bitmask(const size_t bit_index);
 
 
+void bitarray_print(const bitarray_t* const bitarray);
+
 // ******************************* Functions ********************************
 
-bitarray_t* bitarray_new(const size_t bit_sz) {
+bitarray_t* bitarray_new(const size_t bit_sz) 
+{
   // Allocate an underlying buffer of ceil(bit_sz/8) bytes.
   char* const buf = calloc(1, (bit_sz+7) / 8);
   if (buf == NULL) {
@@ -129,7 +135,8 @@ bitarray_t* bitarray_new(const size_t bit_sz) {
   return bitarray;
 }
 
-void bitarray_free(bitarray_t* const bitarray) {
+void bitarray_free(bitarray_t* const bitarray) 
+{
   if (bitarray == NULL) {
     return;
   }
@@ -142,7 +149,8 @@ size_t bitarray_get_bit_sz(const bitarray_t* const bitarray) {
   return bitarray->bit_sz;
 }
 
-bool bitarray_get(const bitarray_t* const bitarray, const size_t bit_index) {
+bool bitarray_get(const bitarray_t* const bitarray, const size_t bit_index) 
+{
   assert(bit_index < bitarray->bit_sz);
 
   // We're storing bits in packed form, 8 per byte.  So to get the nth
@@ -159,7 +167,8 @@ bool bitarray_get(const bitarray_t* const bitarray, const size_t bit_index) {
 
 void bitarray_set(bitarray_t* const bitarray,
                   const size_t bit_index,
-                  const bool value) {
+                  const bool value) 
+{
   assert(bit_index < bitarray->bit_sz);
 
   // We're storing bits in packed form, 8 per byte.  So to set the nth
@@ -174,52 +183,108 @@ void bitarray_set(bitarray_t* const bitarray,
     (value ? bitmask(bit_index) : 0);
 }
 
-void bitarray_randfill(bitarray_t* const bitarray){
+void bitarray_randfill(bitarray_t* const bitarray)
+{
   int32_t *ptr = (int32_t *)bitarray->buf;
-  for (int64_t i=0; i<bitarray->bit_sz/32 + 1; i++){
+  for (int64_t i=0; i<bitarray->bit_sz/32 + 1; i++)
+  {
     ptr[i] = rand();
   }
 }
 
-void bitarray_rotate(bitarray_t* const bitarray,
-                     const size_t bit_offset,
-                     const size_t bit_length,
-                     const ssize_t bit_right_amount) {
-  assert(bit_offset + bit_length <= bitarray->bit_sz);
+void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
+{
+  //DEBUGING
+  #ifdef DEBUG
+  printf("bitarray_reverse(bitarray, %ld, %ld)\n", bit_offset, bit_length);
+  printf("The original bitarray is:\n");
+  bitarray_print(bitarray);
+  #endif
+  //DEBUGING
 
-  if (bit_length == 0) {
+  if(bit_length == 0 || bit_length == 1)
+  {
     return;
   }
 
-  // Convert a rotate left or right to a left rotate only, and eliminate
-  // multiple full rotations.
-  bitarray_rotate_left(bitarray, bit_offset, bit_length,
-                       modulo(-bit_right_amount, bit_length));
+  assert(bit_offset + bit_length <= bitarray -> bit_sz);
+  size_t start = bit_offset;
+  size_t end = bit_offset + bit_length - 1;
+  while(start < end)
+  {
+    size_t bit1 = bitarray_get(bitarray, start);
+    size_t bit2 = bitarray_get(bitarray, end);
+    bitarray_set(bitarray, start, bit2);
+    bitarray_set(bitarray, end, bit1);
+    start++;
+    end--;
+  }
+
+  //DEBUGING
+  #ifdef DEBUG
+  printf("bitarray_reverse(bitarray, %ld, %ld) done\n", bit_offset, bit_length);
+  printf("And the new bitarray is:\n");
+  bitarray_print(bitarray);
+  #endif
+  //DEBUGING
 }
+
+
+void bitarray_rotate(bitarray_t* const bitarray,
+                     const size_t bit_offset,
+                     const size_t bit_length,
+                     const ssize_t bit_right_amount)
+{
+  if(bit_length == 0)
+  {
+    return;
+  }
+  //DEBUGING
+  #ifdef DEBUG
+  printf("bitarray_rotate(bitarray, %ld, %ld, %ld)\n", bit_offset, bit_length, bit_right_amount);
+  #endif
+  //DEBUGING
+
+  assert(bit_offset + bit_length <= bitarray -> bit_sz);
+  size_t bit_right_amount_after_module = modulo(-bit_right_amount, bit_length);
+
+  #ifdef DEBUG
+  printf("bit_right_amount_after_module = %ld\n", bit_right_amount_after_module);
+  #endif
+  bitarray_reverse(bitarray, bit_offset, bit_right_amount_after_module);
+  bitarray_reverse(bitarray, bit_offset + bit_right_amount_after_module, bit_length - bit_right_amount_after_module);
+  bitarray_reverse(bitarray, bit_offset, bit_length);
+}
+
 
 static void bitarray_rotate_left(bitarray_t* const bitarray,
                                  const size_t bit_offset,
                                  const size_t bit_length,
-                                 const size_t bit_left_amount) {
-  for (size_t i = 0; i < bit_left_amount; i++) {
+                                 const size_t bit_left_amount) 
+{
+  for (size_t i = 0; i < bit_left_amount; i++) 
+  {
     bitarray_rotate_left_one(bitarray, bit_offset, bit_length);
   }
 }
 
 static void bitarray_rotate_left_one(bitarray_t* const bitarray,
                                      const size_t bit_offset,
-                                     const size_t bit_length) {
+                                     const size_t bit_length) 
+{
   // Grab the first bit in the range, shift everything left by one, and
   // then stick the first bit at the end.
   const bool first_bit = bitarray_get(bitarray, bit_offset);
   size_t i;
-  for (i = bit_offset; i + 1 < bit_offset + bit_length; i++) {
+  for (i = bit_offset; i + 1 < bit_offset + bit_length; i++) 
+  {
     bitarray_set(bitarray, i, bitarray_get(bitarray, i + 1));
   }
   bitarray_set(bitarray, i, first_bit);
 }
 
-static size_t modulo(const ssize_t n, const size_t m) {
+static size_t modulo(const ssize_t n, const size_t m) 
+{
   const ssize_t signed_m = (ssize_t)m;
   assert(signed_m > 0);
   const ssize_t result = ((n % signed_m) + signed_m) % signed_m;
@@ -227,7 +292,28 @@ static size_t modulo(const ssize_t n, const size_t m) {
   return (size_t)result;
 }
 
-static char bitmask(const size_t bit_index) {
+static char bitmask(const size_t bit_index) 
+{
   return 1 << (bit_index % 8);
 }
 
+void bitarray_print(const bitarray_t* const bitarray) 
+{
+    if (bitarray == NULL) 
+    {
+        printf("bitarray is NULL\n");
+        return;
+    }
+
+    printf("bitarray (%ld bits): ", bitarray->bit_sz);
+    for (size_t i = 0; i < bitarray->bit_sz; i++) 
+    {
+        // Print each bit. Note that bitarray_get already handles bit packing.
+        printf("%d", bitarray_get(bitarray, i));
+        if ((i + 1) % 8 == 0 && i + 1 != bitarray->bit_sz) 
+        {
+            printf(" "); // Add a space every 8 bits for easier reading
+        }
+    }
+    printf("\n");
+}
