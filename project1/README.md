@@ -555,7 +555,111 @@ Succesfully completed tier: 45
 
 这下真的加速了超级多了， 但是还是过不了所有测试
 
-那我咋办？ 要不...同一个 byte 内的情况我也打表？ 然后来个 switch case
+Ohhhhhhhhhhhhhh No! 紧急情况， 上方代码有 bug， 但是官方给的测试太弱了， 没测出来
 
-说办就办！去试一下
+是这样的: 我上方写的都是假设 start 和 end 是对齐 8 bit 的情况， 如果不对齐的话， 比如 start 是某个 byte 倒数第 5 个 bit 的位置， end 是某个 byte 正数第 1 个 bit 的位置， 那这样就没法用上面的查表算法了（毕竟是错位的嘛）
+
+我又写了个测试程序，然后改了下 bug， 现在这个版本应该是正确的：
+
+```c
+static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
+{
+  if(bit_length == 0 || bit_length == 1)
+  {
+    return;
+  }
+
+  size_t start = bit_offset;
+  size_t end = bit_offset + bit_length - 1;
+  size_t start_byte = bit_offset / 8;
+  size_t end_byte = (bit_offset + bit_length - 1) / 8;
+
+  // If reversing within a single byte
+  if(start_byte == end_byte) 
+  {
+      while(start < end)
+      {
+        size_t bit1 = bitarray_get(bitarray, start);
+        size_t bit2 = bitarray_get(bitarray, end);
+        bitarray_set(bitarray, start, bit2);
+        bitarray_set(bitarray, end, bit1);
+        start++;
+        end--;
+      }
+      return;
+  }
+
+  //If it's aligned 
+  if((start + end) % 7 == 0)
+  {
+    char temp = 8 - (start % 8);
+    for(size_t i = 0; i < temp; i++)
+    {
+      size_t bit1 = bitarray_get(bitarray, start);
+      size_t bit2 = bitarray_get(bitarray, end);
+      bitarray_set(bitarray, start, bit2);
+      bitarray_set(bitarray, end, bit1);
+      start++;
+      end--;
+    }
+    start_byte++;
+    end_byte--;
+    // Reverse bytes where full byte reversal is possible
+    while(start_byte < end_byte) 
+    {
+        uint8_t temp = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
+        bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[end_byte]];
+        bitarray -> buf[end_byte] = temp;
+        start_byte++;
+        end_byte--;
+    }
+    return;
+  }
+
+//Oh no, now I have to use the slow regular swap algorithm because it's not aligned
+  while(start < end)
+  {
+    size_t bit1 = bitarray_get(bitarray, start);
+    size_t bit2 = bitarray_get(bitarray, end);
+    bitarray_set(bitarray, start, bit2);
+    bitarray_set(bitarray, end, bit1);
+    start++;
+    end--;
+  }
+}
+
+性能测试大概是
+
+```
+Tier 32 (≈1MB) completed in 0.067680s
+Tier 33 (≈2MB) completed in 0.086575s
+Tier 34 (≈4MB) completed in 0.150487s
+Tier 35 (≈7MB) completed in 0.211393s
+Tier 36 (≈12MB) completed in 0.430775s
+Tier 37 (≈19MB) completed in 0.709886s
+Tier 38 (≈31MB) exceeded 1.00s cutoff with time 1.033241s
+Succesfully completed tier: 37
+```
+
+看来还是不够好。 主要是内存不对齐的版本性能实在是太差了。
+
+用 linux-perf 看下现在的瓶颈：
+
+```
+# Overhead  Command   Shared Object      Symbol                       
+# ........  ........  .................  .............................
+#
+    47.26%  everybit  everybit           [.] bitarray_set
+    19.47%  everybit  everybit           [.] bitarray_get
+    16.01%  everybit  everybit           [.] bitmask
+    13.82%  everybit  everybit           [.] bitarray_reverse
+     2.38%  everybit  libc.so.6          [.] __random
+     0.31%  everybit  libc.so.6          [.] __random_r
+     0.25%  everybit  everybit           [.] bitarray_randfill
+     0.07%  everybit  [kernel.kallsyms]  [k] _raw_spin_lock
+     0.07%  everybit  everybit           [.] rand@plt
+     0.04%  everybit  [kernel.kallsyms]  [k] clear_page_erms
+```
+
+果然就是 set bit, 不对齐的情况一个一个 set 真的太慢了。
 
