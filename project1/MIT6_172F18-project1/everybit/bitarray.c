@@ -193,7 +193,7 @@ void bitarray_randfill(bitarray_t* const bitarray)
   }
 }
 
-void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
+static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
 {
   //DEBUGING
   #ifdef DEBUG
@@ -203,28 +203,19 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
   #endif
   //DEBUGING
 
-  if(bit_length == 0 || bit_length == 1)
+  if(bit_length <= 1)
   {
     return;
   }
+
+  size_t start = bit_offset;
+  size_t end = bit_offset + bit_length - 1;
   size_t start_byte = bit_offset / 8;
   size_t end_byte = (bit_offset + bit_length - 1) / 8;
 
-  // Reverse bytes where full byte reversal is possible
-  while(start_byte < end_byte) 
-  {
-      uint8_t temp = REVERSE_BYTE_LOOKUP[bitarray -> buf[start_byte]];
-      bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP[bitarray -> buf[end_byte]];
-      bitarray -> buf[end_byte] = temp;
-      start_byte++;
-      end_byte--;
-  }
-
   // If reversing within a single byte
-  if (start_byte == end_byte) 
+  if(start_byte == end_byte) 
   {
-      size_t start = bit_offset;
-      size_t end = bit_offset + bit_length - 1;
       while(start < end)
       {
         size_t bit1 = bitarray_get(bitarray, start);
@@ -234,8 +225,48 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
         start++;
         end--;
       }
+      return;
   }
 
+  //If it's aligned 
+  if((start + end) % 7 == 0)
+  {
+    char temp = 8 - (start % 8);
+    for(size_t i = 0; i < temp; i++)
+    {
+      size_t bit1 = bitarray_get(bitarray, start);
+      size_t bit2 = bitarray_get(bitarray, end);
+      bitarray_set(bitarray, start, bit2);
+      bitarray_set(bitarray, end, bit1);
+      start++;
+      end--;
+    }
+    start_byte++;
+    end_byte--;
+    // Reverse bytes where full byte reversal is possible
+    while(start_byte < end_byte) 
+    {
+        uint8_t temp = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
+        bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[end_byte]];
+        bitarray -> buf[end_byte] = temp;
+        start_byte++;
+        end_byte--;
+    }
+    return;
+  }
+
+//Oh no, now I have to use the slow regular swap algorithm because it's not aligned
+  while(start < end)
+  {
+    size_t bit1 = bitarray_get(bitarray, start);
+    size_t bit2 = bitarray_get(bitarray, end);
+    bitarray_set(bitarray, start, bit2);
+    bitarray_set(bitarray, end, bit1);
+    start++;
+    end--;
+  }
+  
+  return;
   //DEBUGING
   #ifdef DEBUG
   printf("bitarray_reverse(bitarray, %ld, %ld) done\n", bit_offset, bit_length);
