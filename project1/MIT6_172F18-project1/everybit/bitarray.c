@@ -54,6 +54,16 @@ struct bitarray {
 
 // ******************** Prototypes for static functions *********************
 
+
+//This function will create a bitmask whose 
+//prior a bits are 1 and others are 0
+//for example, when a = 2, it will
+//generate 0b11000000
+uint64_t bitarray_create_mask_head(size_t a)
+{
+  return ~(((uint64_t)1 << (8 - a)) - 1);
+}
+
 // Rotates a subarray left by an arbitrary number of bits.
 //
 // bit_offset is the index of the start of the subarray
@@ -228,7 +238,8 @@ static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit
       return;
   }
 
-  //If it's aligned 
+  //Now reversing within multiple bytes
+  //If it's aligned, then I can use Lookup table straight away
   if((start + end) % 7 == 0)
   {
     char temp = 8 - (start % 8);
@@ -255,16 +266,38 @@ static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit
     return;
   }
 
-//Oh no, now I have to use the slow regular swap algorithm because it's not aligned
-  while(start < end)
-  {
-    size_t bit1 = bitarray_get(bitarray, start);
-    size_t bit2 = bitarray_get(bitarray, end);
-    bitarray_set(bitarray, start, bit2);
-    bitarray_set(bitarray, end, bit1);
-    start++;
-    end--;
-  }
+// //Oh no, now I have to use the slow regular swap algorithm because it's not aligned
+//   while(start < end)
+//   {
+//     size_t bit1 = bitarray_get(bitarray, start);
+//     size_t bit2 = bitarray_get(bitarray, end);
+//     bitarray_set(bitarray, start, bit2);
+//     bitarray_set(bitarray, end, bit1);
+//     start++;
+//     end--;
+//   }
+
+// Now the reverse is not aligned, I have to do shift in a clever way
+   size_t shift = (7 - (start % 8)) - (end % 8);
+   
+   //Right shift
+   if(shift > 0)
+   {
+      //Deal with the last byte as a special case
+      uint8_t last_byte = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
+      last_byte <<= shift;
+
+
+
+
+      //Deal with the first byte as a special case
+   }
+
+  //Left shift
+   else
+   {
+      assert(shift < 0);
+   }
   
   return;
   //DEBUGING
