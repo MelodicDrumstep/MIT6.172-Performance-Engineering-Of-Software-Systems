@@ -683,3 +683,33 @@ uint64_t bitarray_create_mask_head(size_t a)
 
 ![](https://notes.sjtu.edu.cn/uploads/upload_b300cffcaf924fc5c0d5fc6856e4ff5c.jpg)
 
+
+
+出现了一个大坑： size_t / uint8 等等 unsigned 是不会有负值的！！！
+
+所以我算 shift 只能用
+
+```c 
+  int8_t shift = (int8_t)(7 - (start % 8)) - (end % 8);
+```
+
+而不是
+
+```
+ size_t shift = (7 - (start % 8)) - (end % 8);
+```
+
+另外又发现了一个超级坑的点：我们的 buf 里面存的东西，第 0 位是LSB, 第 7 位是MSB， 但是给的函数打印的时候是从第 0 位打印到第 7 位， 所以打印出来的高位在右边！！这就很坑了，不注意的话左移右移就写反了！
+
+还有一点：这里存的是 char, 所以会进行算术右移， 但是我希望的是逻辑右移， 所以要这样写， 强转成 unsigned char:
+
+```c
+//Now do the shifting!!
+for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
+{
+    bitarray -> buf[i] = ((u_int8_t)(bitarray -> buf[i]) >> shift) | ((u_int8_t)(bitarray -> buf[i + 1]) << (8 - shift));
+}
+
+bitarray -> buf[end_byte_pointer_copy] = (u_int8_t)(bitarray -> buf[end_byte_pointer_copy]) >> shift;
+
+```

@@ -31,7 +31,11 @@
 // Abstract data type representing an array of bits.
 typedef struct bitarray bitarray_t;
 
+
+
 // ******************************* Prototypes *******************************
+
+void bitarray_reverse_naive(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length);
 
 void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length);
 

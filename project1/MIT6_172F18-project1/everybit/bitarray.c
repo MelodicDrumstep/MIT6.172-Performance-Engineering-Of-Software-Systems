@@ -36,7 +36,7 @@
 #include <sys/types.h>
 
 
-#define DEBUG
+//#define DEBUG
 
 // ********************************* Types **********************************
 
@@ -54,6 +54,14 @@ struct bitarray {
 
 // ******************** Prototypes for static functions *********************
 
+
+void print_uint8_in_binary(uint8_t value) {
+    printf("Binary representation of %u is: ", value);
+    for (int i = 7; i >= 0; i--) {
+        printf("%d", (value >> i) & 1); // 右移i位，然后与1做AND运算来获取第i位的值
+    }
+    printf("\n");
+}
 
 //This function will create a bitmask whose 
 //prior a bits are 1 and others are 0
@@ -223,6 +231,7 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
   printf("bitarray_reverse(bitarray, %ld, %ld)\n", bit_offset, bit_length);
   printf("The original bitarray is:\n");
   bitarray_print(bitarray);
+  printf("\n");
   #endif
   //DEBUGING
 
@@ -239,6 +248,13 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
   // If reversing within a single byte
   if(start_byte == end_byte) 
   {
+
+    //DEBUGING
+    #ifdef DEBUG
+    printf("The start and end are in the same byte\n");
+    #endif
+    //DEBUGING
+
       while(start < end)
       {
         size_t bit1 = bitarray_get(bitarray, start);
@@ -253,8 +269,15 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
 
   //Now reversing within multiple bytes
   //If it's aligned, then I can use Lookup table straight away
-  if((start + end) % 7 == 0)
+  if((start + end + 1) % 8 == 0)
   {
+
+    //DEBUGING
+    #ifdef DEBUG
+    printf("The start and end are aligned\n");
+    #endif
+    //DEBUGING
+
     char temp = 8 - (start % 8);
     for(size_t i = 0; i < temp; i++)
     {
@@ -291,19 +314,35 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
 //   }
 
 // Now the reverse is not aligned, I have to do shift in a clever way
-   size_t shift = (7 - (start % 8)) - (end % 8);
+   int8_t shift = (int8_t)(7 - (start % 8)) - (end % 8);
+   
+   //DEBUGING
+   #ifdef DEBUG
+   printf("The shift is %d\n", shift);
+   printf("start byte is %ld and end byte is %ld\n", start_byte, end_byte);
+   printf("start is %ld and end is %ld\n", start, end);
+   #endif
+   //DEBUGING
    
    //Left shift
    if(shift > 0)
    {
+
+      //DEBUGING
+      #ifdef DEBUG
+      printf("The shift is positive\n");
+      #endif
+      //DEBUGING
+
       //Now I store the start byte and end byte
       //In the end I will restore them with correct value
       uint8_t store_start_byte = bitarray -> buf[start_byte];
       uint8_t store_end_byte = bitarray -> buf[end_byte];
 
+
       //And copy the start byte pointer and the end byte pointer for the same reason
       size_t start_byte_pointer_copy = start_byte;
-      size_t end_byte_pointer_copy = end_byte - 1;
+      size_t end_byte_pointer_copy = end_byte;
 
       //Now just invert the middle ones as the last case
       while(start_byte < end_byte) 
@@ -315,29 +354,80 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
           end_byte--;
       }
 
+      //DEBUGING
+      #ifdef DEBUG
+      printf("After the inner while loop\n");
+      bitarray_print(bitarray);
+      printf("\n");
+      #endif
+      //DEBUGING
+
       //Now do the shifting!!
       for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
       {
-          bitarray -> buf[i] = (bitarray -> buf[i] << shift) | (bitarray -> buf[i + 1] >> (8 - shift));
+          bitarray -> buf[i] = ((u_int8_t)(bitarray -> buf[i]) >> shift) | ((u_int8_t)(bitarray -> buf[i + 1]) << (8 - shift));
       }
 
-      bitarray -> buf[end_byte_pointer_copy] <<= shift;
+      bitarray -> buf[end_byte_pointer_copy] = (u_int8_t)(bitarray -> buf[end_byte_pointer_copy]) >> shift;
+
+      //DEBUGING
+      #ifdef DEBUG
+      printf("After the shifing\n");
+      bitarray_print(bitarray);
+      printf("\n");
+      #endif
+      //DEBUGING      
 
       //Now deal with the start one and the end one with special care
 
+      //DEBUGING
+      #ifdef DEBUG
+      printf("start mod 8 is %ld and end mod 8 is %ld\n", start % 8, end % 8);
+      printf("start byte copy:\n");
+      print_uint8_in_binary(store_start_byte);
+      printf("end byte copy:\n");
+      print_uint8_in_binary(store_end_byte);
+      printf("start byte right now:\n");
+      print_uint8_in_binary(bitarray -> buf[start_byte_pointer_copy]);
+      printf("end byte right now:\n");
+      print_uint8_in_binary(bitarray -> buf[end_byte_pointer_copy]);
+      #endif
+      printf("bitarray_create_mask_tail(6):\n");
+      print_uint8_in_binary(bitarray_create_mask_tail(2));
+      printf("bitarray_create_mask_head(2):\n");
+      print_uint8_in_binary(bitarray_create_mask_head(6));
+      //DEBUGING
+
       //For the start one:
-      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_head(start % 8) & store_start_byte) 
-                                              |  (bitarray_create_mask_tail(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_tail(start % 8) & store_start_byte) 
+                                              |  (bitarray_create_mask_head(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+
+      //DEBUGING
+      #ifdef DEBUG
+      printf("the first value is :");
+      print_uint8_in_binary((bitarray_create_mask_tail(start % 8) & store_start_byte));
+      printf("the second value is :");
+      print_uint8_in_binary((bitarray_create_mask_head(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]));
+      #endif
+      //DEBUGING
+
       //For the end one:
-      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_head(7 - end % 8) & store_end_byte) 
-                                              |  (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]);
+      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]) 
+                                              |  (bitarray_create_mask_head(7 - end % 8) & store_end_byte);
    }
 
   //Right shift
    else
    {
+      //DEBUGING
+      #ifdef DEBUG
+      printf("shift is negative: %d\n", shift);
+      #endif
+      //DEBUGING
+
       assert(shift < 0);
       shift = -shift;
+
       //Now I store the start byte and end byte
       //In the end I will restore them with correct value
       uint8_t store_start_byte = bitarray -> buf[start_byte];
@@ -345,8 +435,7 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
 
       //And copy the start byte pointer and the end byte pointer for the same reason
       size_t start_byte_pointer_copy = start_byte;
-      size_t end_byte_pointer_copy = end_byte - 1;
-
+      size_t end_byte_pointer_copy = end_byte;
 
       //Now just invert the middle ones as the last case
       while(start_byte < end_byte) 
@@ -358,23 +447,67 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
           end_byte--;
       }
 
+      //DEBUGING
+      #ifdef DEBUG
+      printf("After the inner while loop\n");
+      bitarray_print(bitarray);
+      printf("\n");
+      #endif
+      //DEBUGING
+
+
       //Now do the shifting!!
-      for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
+      for(size_t i = end_byte_pointer_copy; i > start_byte_pointer_copy; i--)
       {
-          bitarray -> buf[i] = (bitarray -> buf[i] >> shift) | (bitarray -> buf[i + 1] << (8 - shift));
+          bitarray -> buf[i] = ((u_int8_t)(bitarray -> buf[i]) << shift) | ((u_int8_t)(bitarray -> buf[i - 1]) >> (8 - shift));
       }
 
-      bitarray -> buf[end_byte_pointer_copy] >>= shift;
+      bitarray -> buf[start_byte_pointer_copy] = (u_int8_t)(bitarray -> buf[start_byte_pointer_copy]) << shift;
+
+      //DEBUGING
+      #ifdef DEBUG
+      printf("After the shifing\n");
+      bitarray_print(bitarray);
+      printf("\n");
+      #endif
+      //DEBUGING      
 
       //Now deal with the start one and the end one with special care
 
+      //DEBUGING
+      #ifdef DEBUG
+      printf("start mod 8 is %ld and end mod 8 is %ld\n", start % 8, end % 8);
+      printf("start byte copy:\n");
+      print_uint8_in_binary(store_start_byte);
+      printf("end byte copy:\n");
+      print_uint8_in_binary(store_end_byte);
+      printf("start byte right now:\n");
+      print_uint8_in_binary(bitarray -> buf[start_byte_pointer_copy]);
+      printf("end byte right now:\n");
+      print_uint8_in_binary(bitarray -> buf[end_byte_pointer_copy]);
+      #endif
+      printf("bitarray_create_mask_tail(6):\n");
+      print_uint8_in_binary(bitarray_create_mask_tail(2));
+      printf("bitarray_create_mask_head(2):\n");
+      print_uint8_in_binary(bitarray_create_mask_head(6));
+      //DEBUGING
+
       //For the start one:
-      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_head(start % 8) & store_start_byte) 
-                                              |  (bitarray_create_mask_tail(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_tail(start % 8) & store_start_byte) 
+                                              |  (bitarray_create_mask_head(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+
+      //DEBUGING
+      #ifdef DEBUG
+      printf("the first value is :");
+      print_uint8_in_binary((bitarray_create_mask_tail(start % 8) & store_start_byte));
+      printf("the second value is :");
+      print_uint8_in_binary((bitarray_create_mask_head(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]));
+      #endif
+      //DEBUGING
+
       //For the end one:
-      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_head(7 - end % 8) & store_end_byte) 
-                                              |  (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]);
-   }
+      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]) 
+                                              |  (bitarray_create_mask_head(7 - end % 8) & store_end_byte);   }
   
   return;
   //DEBUGING
@@ -473,4 +606,26 @@ void bitarray_print(const bitarray_t* const bitarray)
         }
     }
     //printf("\n");
+}
+
+
+void bitarray_reverse_naive(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
+{
+  if(bit_length == 0)
+  {
+    return;
+  }
+
+  assert(bit_offset + bit_length <= bitarray -> bit_sz);
+  size_t start = bit_offset;
+  size_t end = bit_offset + bit_length - 1;
+  while(start < end)
+  {
+    size_t bit1 = bitarray_get(bitarray, start);
+    size_t bit2 = bitarray_get(bitarray, end);
+    bitarray_set(bitarray, start, bit2);
+    bitarray_set(bitarray, end, bit1);
+    start++;
+    end--;
+  }
 }
