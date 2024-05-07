@@ -33,7 +33,7 @@ typedef struct bitarray bitarray_t;
 
 // ******************************* Prototypes *******************************
 
-static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length);
+void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length);
 
 void bitarray_print(const bitarray_t* const bitarray);
 

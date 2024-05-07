@@ -36,7 +36,7 @@
 #include <sys/types.h>
 
 
-//#define DEBUG
+#define DEBUG
 
 // ********************************* Types **********************************
 
@@ -59,9 +59,22 @@ struct bitarray {
 //prior a bits are 1 and others are 0
 //for example, when a = 2, it will
 //generate 0b11000000
-uint64_t bitarray_create_mask_head(size_t a)
+uint8_t bitarray_create_mask_head(size_t a)
 {
-  return ~(((uint64_t)1 << (8 - a)) - 1);
+  return ~(((uint8_t)1 << (8 - a)) - 1);
+}
+
+//This function will create a bitmask whose 
+//rightmost a bits are 1 and others are 0
+//for example, when a = 2, it will
+//generate 0b00000011
+uint8_t bitarray_create_mask_tail(size_t a)
+{
+  if(a == 8)
+  {
+    return (uint8_t)-1;//This is 11111111
+  }
+  return ((uint8_t)1 << a) - 1;
 }
 
 // Rotates a subarray left by an arbitrary number of bits.
@@ -203,7 +216,7 @@ void bitarray_randfill(bitarray_t* const bitarray)
   }
 }
 
-static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
+void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
 {
   //DEBUGING
   #ifdef DEBUG
@@ -280,23 +293,87 @@ static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit
 // Now the reverse is not aligned, I have to do shift in a clever way
    size_t shift = (7 - (start % 8)) - (end % 8);
    
-   //Right shift
+   //Left shift
    if(shift > 0)
    {
-      //Deal with the last byte as a special case
-      uint8_t last_byte = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
-      last_byte <<= shift;
+      //Now I store the start byte and end byte
+      //In the end I will restore them with correct value
+      uint8_t store_start_byte = bitarray -> buf[start_byte];
+      uint8_t store_end_byte = bitarray -> buf[end_byte];
 
+      //And copy the start byte pointer and the end byte pointer for the same reason
+      size_t start_byte_pointer_copy = start_byte;
+      size_t end_byte_pointer_copy = end_byte - 1;
 
+      //Now just invert the middle ones as the last case
+      while(start_byte < end_byte) 
+      {
+          uint8_t temp = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
+          bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[end_byte]];
+          bitarray -> buf[end_byte] = temp;
+          start_byte++;
+          end_byte--;
+      }
 
+      //Now do the shifting!!
+      for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
+      {
+          bitarray -> buf[i] = (bitarray -> buf[i] << shift) | (bitarray -> buf[i + 1] >> (8 - shift));
+      }
 
-      //Deal with the first byte as a special case
+      bitarray -> buf[end_byte_pointer_copy] <<= shift;
+
+      //Now deal with the start one and the end one with special care
+
+      //For the start one:
+      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_head(start % 8) & store_start_byte) 
+                                              |  (bitarray_create_mask_tail(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+      //For the end one:
+      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_head(7 - end % 8) & store_end_byte) 
+                                              |  (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]);
    }
 
-  //Left shift
+  //Right shift
    else
    {
       assert(shift < 0);
+      shift = -shift;
+      //Now I store the start byte and end byte
+      //In the end I will restore them with correct value
+      uint8_t store_start_byte = bitarray -> buf[start_byte];
+      uint8_t store_end_byte = bitarray -> buf[end_byte];
+
+      //And copy the start byte pointer and the end byte pointer for the same reason
+      size_t start_byte_pointer_copy = start_byte;
+      size_t end_byte_pointer_copy = end_byte - 1;
+
+
+      //Now just invert the middle ones as the last case
+      while(start_byte < end_byte) 
+      {
+          uint8_t temp = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
+          bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[end_byte]];
+          bitarray -> buf[end_byte] = temp;
+          start_byte++;
+          end_byte--;
+      }
+
+      //Now do the shifting!!
+      for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
+      {
+          bitarray -> buf[i] = (bitarray -> buf[i] >> shift) | (bitarray -> buf[i + 1] << (8 - shift));
+      }
+
+      bitarray -> buf[end_byte_pointer_copy] >>= shift;
+
+      //Now deal with the start one and the end one with special care
+
+      //For the start one:
+      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_head(start % 8) & store_start_byte) 
+                                              |  (bitarray_create_mask_tail(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+      //For the end one:
+      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_head(7 - end % 8) & store_end_byte) 
+                                              |  (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]);
    }
   
   return;
