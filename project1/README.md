@@ -627,6 +627,7 @@ static inline void bitarray_reverse(bitarray_t* const bitarray, const size_t bit
     end--;
   }
 }
+```
 
 性能测试大概是
 
@@ -662,4 +663,23 @@ Succesfully completed tier: 37
 ```
 
 果然就是 set bit, 不对齐的情况一个一个 set 真的太慢了。
+
+我想到了一个用左移 / 右移来处理最难处理的不对称情况的算法， 我正在实现它。
+
+我首先实现了一个这样的辅助函数， 可以创建一个前 a 位为 1 其他位为 0 的 bitmask.
+
+```c
+//This function will create a bitmask whose 
+//prior a bits are 1 and others are 0
+//for example, when a = 2, it will
+//generate 0b11000000
+uint64_t bitarray_create_mask_head(size_t a)
+{
+  return ~(((uint64_t)1 << (8 - a)) - 1);
+}
+```
+
+然后我的思路是， 我先假装是对称的，把逆序做了， 之后再移位。 我画了个图来示意：(为了简便起见， 图里我假设 4 个 bit 组成一个 Byte)
+
+![](https://notes.sjtu.edu.cn/uploads/upload_b300cffcaf924fc5c0d5fc6856e4ff5c.jpg)
 
