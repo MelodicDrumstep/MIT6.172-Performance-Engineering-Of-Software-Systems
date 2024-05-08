@@ -41,6 +41,8 @@ void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const
 
 void bitarray_print(const bitarray_t* const bitarray);
 
+bitarray_t* bitarray_new_with_2byte_value(u_int8_t value1, u_int8_t value2);
+
 // Allocates space for a new bit array.
 // bit_sz is the number of bits storable in the resultant bit array
 bitarray_t* bitarray_new(const size_t bit_sz);

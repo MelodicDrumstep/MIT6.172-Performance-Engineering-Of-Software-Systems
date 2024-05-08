@@ -683,9 +683,177 @@ uint64_t bitarray_create_mask_head(size_t a)
 
 ![](https://notes.sjtu.edu.cn/uploads/upload_b300cffcaf924fc5c0d5fc6856e4ff5c.jpg)
 
+接下来直接来看看我的最终版本的实现吧！我写了非常详尽的注释
+
+##### 算法代码详解
+
+```c
+void bitarray_reverse(bitarray_t* const bitarray, const size_t bit_offset, const size_t bit_length)
+{
+  if(bit_length <= 1)
+  {
+    return;
+  }
+
+  size_t start = bit_offset;
+  size_t end = bit_offset + bit_length - 1;
+  size_t start_byte = bit_offset / 8;
+  size_t end_byte = (bit_offset + bit_length - 1) / 8;
+
+  // If reversing within a single byte
+  if(start_byte == end_byte) 
+  {
+      while(start < end)
+      {
+        size_t bit1 = bitarray_get(bitarray, start);
+        size_t bit2 = bitarray_get(bitarray, end);
+        bitarray_set(bitarray, start, bit2);
+        bitarray_set(bitarray, end, bit1);
+        start++;
+        end--;
+      }
+      return;
+  }
+
+  //Now reversing within multiple bytes
+  //If it's aligned, then I can use Lookup table straight away
+  if((start + end + 1) % 8 == 0)
+  {
+    char temp = 8 - (start % 8);
+    for(size_t i = 0; i < temp; i++)
+    {
+      size_t bit1 = bitarray_get(bitarray, start);
+      size_t bit2 = bitarray_get(bitarray, end);
+      bitarray_set(bitarray, start, bit2);
+      bitarray_set(bitarray, end, bit1);
+      start++;
+      end--;
+    }
+    start_byte++;
+    end_byte--;
+    // Reverse bytes where full byte reversal is possible
+    while(start_byte < end_byte) 
+    {
+
+          //Notice that I have to convert the index of array to be unsigned!!!
+          //Otherwise it will fail
+        uint8_t temp = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[start_byte]];
+        bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[end_byte]];
+        bitarray -> buf[end_byte] = temp;
+        start_byte++;
+        end_byte--;
+    }
+    return;
+  }
+
+// Now the reverse is not aligned, I have to do shift in a clever way
+// Firstly reverse by BYTE, then do shift for the middle bytes. Notice that
+// I have to deal with the first byte and the end byte as a special case
 
 
-出现了一个大坑： size_t / uint8 等等 unsigned 是不会有负值的！！！
+  //Compute the shift value
+  //Notice!! "start" and "end" variables are size_t
+  // MUST be converted to int8_t to get the shift value
+   int8_t shift = (int8_t)(7 - (start % 8)) - (end % 8);
+
+   //Left shift case
+   if(shift > 0)
+   {
+      //Now I store the start byte and end byte
+      //In the end I will restore them with correct value
+      uint8_t store_start_byte = bitarray -> buf[start_byte];
+      uint8_t store_end_byte = bitarray -> buf[end_byte];
+
+
+      //And copy the start byte pointer and the end byte pointer for the same reason
+      size_t start_byte_pointer_copy = start_byte;
+      size_t end_byte_pointer_copy = end_byte;
+
+      //Now just invert the middle ones as the last case
+      while(start_byte < end_byte) 
+      {
+          //Notice that I have to convert the index of array to be unsigned!!!
+          //Otherwise it will fail
+          uint8_t temp = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[start_byte]];
+          bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[end_byte]];
+          bitarray -> buf[end_byte] = temp;
+          start_byte++;
+          end_byte--;
+      }
+
+      //Now do the shifting!!
+      //In that here is left shift, we start from the start byte 
+      
+      for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
+      {
+          bitarray -> buf[i] = ((u_int8_t)(bitarray -> buf[i]) >> shift) | ((u_int8_t)(bitarray -> buf[i + 1]) << (8 - shift));
+      }
+
+      //Now shift the end byte
+      bitarray -> buf[end_byte_pointer_copy] = (u_int8_t)(bitarray -> buf[end_byte_pointer_copy]) >> shift;
+
+      //Now restore the start byte
+      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_tail(start % 8) & store_start_byte) 
+                                              |  (bitarray_create_mask_head(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+      //And restore the end byte
+      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]) 
+                                              |  (bitarray_create_mask_head(7 - end % 8) & store_end_byte);
+   }
+
+  //Right shift, it's just the same as the former one
+  //invert "<<" and ">>"
+  //and when shifting, start from the end byte to the start byte
+   else
+   {
+      assert(shift < 0);
+      shift = -shift;
+
+      //Now I store the start byte and end byte
+      //In the end I will restore them with correct value
+      uint8_t store_start_byte = bitarray -> buf[start_byte];
+      uint8_t store_end_byte = bitarray -> buf[end_byte];
+
+      //And copy the start byte pointer and the end byte pointer for the same reason
+      size_t start_byte_pointer_copy = start_byte;
+      size_t end_byte_pointer_copy = end_byte;
+
+      //Now just invert the middle ones as the last case
+      while(start_byte < end_byte) 
+      {
+          uint8_t temp = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[start_byte]];
+          bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[end_byte]];
+          bitarray -> buf[end_byte] = temp;
+          start_byte++;
+          end_byte--;
+      }
+
+      //Now do the shifting!! start from the end byte
+      for(size_t i = end_byte_pointer_copy; i > start_byte_pointer_copy; i--)
+      {
+          bitarray -> buf[i] = ((u_int8_t)(bitarray -> buf[i]) << shift) | ((u_int8_t)(bitarray -> buf[i - 1]) >> (8 - shift));
+      }
+
+      //shift the start byte
+      bitarray -> buf[start_byte_pointer_copy] = (u_int8_t)(bitarray -> buf[start_byte_pointer_copy]) << shift;
+
+      //restore the start byte
+      bitarray -> buf[start_byte_pointer_copy] = (bitarray_create_mask_tail(start % 8) & store_start_byte) 
+                                              |  (bitarray_create_mask_head(8 - start % 8) & bitarray -> buf[start_byte_pointer_copy]);
+
+      //And restore the end byte
+      bitarray -> buf[end_byte_pointer_copy] = (bitarray_create_mask_tail(end % 8 + 1) & bitarray -> buf[end_byte_pointer_copy]) 
+                                              |  (bitarray_create_mask_head(7 - end % 8) & store_end_byte);   }
+    return;
+}
+```
+
+这个算法真的写得很开心！！
+
+##### 实现这个算法中遇到过的重重困难
+
+###### 1
+
+首先出现了一个大坑： size_t / uint8 等等 unsigned 的类型是不会有负值的！！！
 
 所以我算 shift 只能用
 
@@ -695,11 +863,17 @@ uint64_t bitarray_create_mask_head(size_t a)
 
 而不是
 
-```
+```c
  size_t shift = (7 - (start % 8)) - (end % 8);
 ```
 
+赋值语句右边也要强制类型转换， 因为这里的 start, end 都是 size_t, 如果不转换右边就算出 size_t 了。
+
+###### 2
+
 另外又发现了一个超级坑的点：我们的 buf 里面存的东西，第 0 位是LSB, 第 7 位是MSB， 但是给的函数打印的时候是从第 0 位打印到第 7 位， 所以打印出来的高位在右边！！这就很坑了，不注意的话左移右移就写反了！
+
+###### 3
 
 还有一点：这里存的是 char, 所以会进行算术右移， 但是我希望的是逻辑右移， 所以要这样写， 强转成 unsigned char:
 
@@ -709,7 +883,85 @@ for(size_t i = start_byte_pointer_copy; i < end_byte_pointer_copy; i++)
 {
     bitarray -> buf[i] = ((u_int8_t)(bitarray -> buf[i]) >> shift) | ((u_int8_t)(bitarray -> buf[i + 1]) << (8 - shift));
 }
-
 bitarray -> buf[end_byte_pointer_copy] = (u_int8_t)(bitarray -> buf[end_byte_pointer_copy]) >> shift;
-
 ```
+
+###### 4
+
+又遇到了一个超级坑的点：我在数组索引的时候， 传入的东西要是一个 unsigned 值， 而我 buf 里面存的是 char. 所以我传入之前要先把这个 char 强制类型转换成 unsigned char, 或者叫 uint8_t, 不然数组索引会失效！这个 bug 真的很难找， 但是找到了之后感觉真的学到了很多很多！ 
+
+```c
+uint8_t temp = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[start_byte]];
+bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[bitarray -> buf[end_byte]];
+```
+
+要写成
+
+```c
+uint8_t temp = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[start_byte]];
+bitarray -> buf[start_byte] = REVERSE_BYTE_LOOKUP_8[(uint8_t)bitarray -> buf[end_byte]];
+```
+
+
+终于全过了正确性测试，真的很开心，很不容易！！
+
+```shell
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 34PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 41PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 49PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 52PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 55PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 58PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 61PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 67PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 71PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 75PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 79PASSED
+everybit /mnt/d/MIT6.172/project1/MIT6_172F18-project1/everybit/tests/default at line 83PASSED
+Ran 4 test functions, 12 individual tests passed, 0 individual tests failed.
+PASSED
+```
+
+##### 最终性能测试
+
+最后再来看下运行时间：
+
+```shell
+./everybit -s:
+
+Tier 31 (≈1MB) completed in 0.001960s
+Tier 32 (≈1MB) completed in 0.003096s
+Tier 33 (≈2MB) completed in 0.004906s
+Tier 34 (≈4MB) completed in 0.007150s
+Tier 35 (≈7MB) exceeded 0.01s cutoff with time 0.013421s
+Succesfully completed tier: 34
+
+
+./everybit -m
+
+
+Tier 34 (≈4MB) completed in 0.007189s
+Tier 35 (≈7MB) completed in 0.014021s
+Tier 36 (≈12MB) completed in 0.021735s
+Tier 37 (≈19MB) completed in 0.035607s
+Tier 38 (≈31MB) completed in 0.057460s
+Tier 39 (≈51MB) exceeded 0.10s cutoff with time 0.104643s
+Succesfully completed tier: 38
+
+./everybit -l
+
+Tier 40 (≈83MB) completed in 0.171424s
+Tier 41 (≈135MB) completed in 0.250380s
+Tier 42 (≈218MB) completed in 0.399608s
+Tier 43 (≈354MB) completed in 0.681227s
+Tier 44 (≈573MB) exceeded 1.00s cutoff with time 1.015854s
+Succesfully completed tier: 43
+```
+
+综上， -l 达到了 43 层， 真的效果已经超级好了！
+
+## 总结
+
+我感觉这个 project 让我学到的东西真的超级超级多。 首先， 我可以改进 rotate 算法， 把问题规约成计算 reverse. 然后我先实现朴素的按 bit 的 reverse. 之后我又可以想到， 为什么不直接按 byte 来 reverse 呢？ 也就是直接打表好了。 但是打表又有个问题： 如果 reverse 的序列不对齐（或者说不对称）怎么办？ 那我就要先 reverse, 结束之后再 shift!! 所以最终我就按照这个思路实现了整个算法， 加速了超级多倍。 
+
+最终结果是 -l 测试达到了 43 层！！
