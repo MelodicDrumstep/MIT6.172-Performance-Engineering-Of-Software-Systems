@@ -681,7 +681,7 @@ uint64_t bitarray_create_mask_head(size_t a)
 
 然后我的思路是， 我先假装是对称的，把逆序做了， 之后再移位。 我画了个图来示意：(为了简便起见， 图里我假设 4 个 bit 组成一个 Byte)
 
-![](https://notes.sjtu.edu.cn/uploads/upload_b300cffcaf924fc5c0d5fc6856e4ff5c.jpg)
+![](https://notes.sjtu.edu.cn/uploads/upload_b80c03742949fc01e577c09ff801d6de.jpg)
 
 接下来直接来看看我的最终版本的实现吧！我写了非常详尽的注释
 
