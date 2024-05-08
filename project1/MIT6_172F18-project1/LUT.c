@@ -1,23 +1,32 @@
+
 #include <stdio.h>
 #include "./everybit/bitarray.h"
 #include <math.h>
-
-int main()
+int reverse_bits(unsigned int x) 
 {
-    printf("static const uint8_t REVERSE_BYTE_LOOKUP[256] = \n{\n");
-    for(int i = 0; i < pow(2, 7); i++)
+    unsigned int reversed = 0;
+    unsigned int bits = 8; 
+    while(bits--) 
     {
-        int to_be_reverse = i;
-        bitarray_t * bits = bitarray_new(8);
-        for(int j = 0; j < 8; j++)
+        reversed = (reversed << 1) | (x & 1);
+        x >>= 1;
+    }
+    return reversed;
+}
+
+int main() {
+    printf("static const uint8_t REVERSE_BYTE_LOOKUP[256] = \n{\n");
+    for(int i = 0; i < 256; i++) 
+    {
+        int to_be_reversed = i;
+        int reversed = reverse_bits(to_be_reversed);
+        printf("0x%02X", reversed); 
+
+        if(i < 255) 
         {
-            bitarray_set(bits, 7 - j, (to_be_reverse & 1) == 1);
-            to_be_reverse = to_be_reverse >> 1;
+            printf(", ");
         }
-        bitarray_reverse(bits, 0, 8);
-        bitarray_print(bits);
-        printf(", ");
-        if(i % 8 == 7)
+        if((i + 1) % 8 == 0) 
         {
             printf("\n");
         }
