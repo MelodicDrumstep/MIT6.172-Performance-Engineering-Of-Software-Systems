@@ -1,0 +1,17 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 75  of event 'cpu-clock:pppH'
+# Event count (approx.): 18750000
+#
+# Overhead  Command  Shared Object  Symbol  
+# ........  .......  .............  ........
+#
+   100.00%  loop     loop           [.] main
+
+
+#
+# (Tip: If you prefer Intel style assembly, try: perf annotate -M intel)
+#
