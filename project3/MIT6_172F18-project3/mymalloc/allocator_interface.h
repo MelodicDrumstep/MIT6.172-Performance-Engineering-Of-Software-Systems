@@ -50,6 +50,8 @@ void libc_reset_brk();
 void* libc_heap_lo();
 void* libc_heap_hi();
 
+//This use the initializer list of a C struct
+//imported in C99 standard
 static const malloc_impl_t libc_impl = {
   .init = &libc_init, .malloc = &libc_malloc, .realloc = &libc_realloc,
   .free = &libc_free, .check = &libc_check, .reset_brk = &libc_reset_brk,
