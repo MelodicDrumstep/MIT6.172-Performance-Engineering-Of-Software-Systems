@@ -126,3 +126,5 @@ void* my_malloc(size_t size) {
 
 因此我很自然的一个改进方法就是， 我维护一个 free list， 然后每次找 first fit 的块。
 
+
+进度 : 写完了 init / malloc， 明天写 free。
