@@ -71,6 +71,8 @@ FREE_MEM_BLOCK * mem_list_tail;
 #define INIT_SIZE 2
 // INIT_SIZE * ALIGNMENT will be the initial size of the heap
 
+// Create this struct 
+// for the convenience of manage Malloced Block
 typedef struct alloced_mem_block ALLOC_MEM_BLOCK;
 
 struct alloced_mem_block
@@ -87,10 +89,16 @@ struct alloced_mem_block
 // ------------------------------------------
 // ------------------------------------------
 
-
 // check - This checks our invariant that the size_t header before every
 // block points to either the beginning of the next block, or the end of the
 // heap.
+
+/*
+This is my check function.
+
+I will check :
+(1) header will end at heap_hi or not
+*/
 int my_check() 
 {
 
@@ -127,6 +135,20 @@ int my_check()
   return 0;
 }
 
+/*
+This is another check function to be inserted into the code
+It will check :
+(1) 
+Whether there's a cycle in a list
+(It should be no cycle)
+
+(2)
+Whether the linked list can form a linked list or not
+
+(3)
+Whether there's a 1-node cycle or not
+
+*/
 void check_the_whole_list()
 {
   printf("~~~~~~~~~~~~~~~~~~ Inside check_the_whole_list function ~~~~~~~~~~~~~~~~\n");
@@ -151,10 +173,21 @@ void check_the_whole_list()
   printf("Finish check 1\n");
 
   FREE_MEM_BLOCK * pointer2Block = mem_list_head;
+  int cnt = 1;
   while(pointer2Block != NULL)
   {
-    assert(pointer2Block -> prev != pointer2Block && pointer2Block -> next != pointer2Block);
+    if(pointer2Block -> next != NULL)
+    {
+      assert(pointer2Block -> next -> prev == pointer2Block);
+    }
+    if(pointer2Block -> prev == pointer2Block || pointer2Block -> next == pointer2Block)
+    {
+      printf("Damn, and cnt is : %d\n", cnt);
+    }
+    assert(pointer2Block -> prev != pointer2Block);
+    assert(pointer2Block -> next != pointer2Block);
     pointer2Block = pointer2Block -> next;
+    cnt++;
   }
 
   printf("Finish check 2\n");
@@ -202,7 +235,6 @@ int my_init()
 //  Always allocate a block whose size is a multiple of the alignment.
 void* my_malloc(size_t size) 
 {
-
   // DEBUGING
   #ifdef MYDEBUG
     printf("~~~~~~~~~~~~~~~~~~ Inside my_malloc function ~~~~~~~~~~~~~~~~\n");
@@ -260,6 +292,7 @@ void* my_malloc(size_t size)
     // DEBUGING
     #ifdef MYDEBUG
       printf("STEP in the First case\n");
+      check_the_whole_list();
     #endif
     // DEBUGING
 
@@ -269,6 +302,13 @@ void* my_malloc(size_t size)
     // If so, we have to renew the head of the list
 
     char flag_tail = pointer2Block == mem_list_tail;
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish -2\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
 
     new_block = (FREE_MEM_BLOCK * )((char * )pointer2Block + aligned_size);
     // Now I will place the new memory block node at "(char * )pointer2Block + aligned_size"
@@ -280,12 +320,37 @@ void* my_malloc(size_t size)
     assert(pointer2Block != pointer2Block -> next);
     assert(pointer2Block != new_block);
 
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish -1\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
+
     new_block -> size = pointer2Block -> size - aligned_size;
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish 0\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
+
+    assert(pointer2Block -> next != new_block);
+
     new_block -> next = pointer2Block -> next;
 
     // DEBUGING
     #ifdef MYDEBUG
       printf("Finish 1\n");
+      if(pointer2Block == mem_list_head)
+      {
+        printf("pointer2Block == mem_list_head\n");
+      }
+      if(pointer2Block == mem_list_tail)
+      {
+        printf("pointer2Block == mem_list_tail\n");
+      }
       check_the_whole_list();
     #endif
     // DEBUGING
@@ -318,6 +383,7 @@ void* my_malloc(size_t size)
       assert(new_block -> next != new_block -> prev);
 
       new_block -> next -> prev = new_block;
+
       assert(new_block != new_block -> next);
       assert(new_block -> next != new_block -> prev);
     }
@@ -398,6 +464,7 @@ void* my_malloc(size_t size)
     // Notice that there maybe some oppotunity for optimization here
     // To reduce the number of operations
 
+    //Create a new FREE_MEM_BLOCK at the right location
     new_block = (FREE_MEM_BLOCK * )((char * )pointer2Block + aligned_size);
     new_block -> size = pointer2Block -> size - aligned_size;
     new_block -> next = pointer2Block -> next;
@@ -464,7 +531,7 @@ void* my_malloc(size_t size)
     newly_alloced_block -> size = aligned_size;
     // newly_alloced_block -> prev = pointer2Block -> prev;
     // newly_alloced_block -> next = new_block;
-    newly_alloced_block -> data = (char * )&(newly_alloced_block -> data);
+    // newly_alloced_block -> data = (char * )&(newly_alloced_block -> data);
 
     // DEBUGING
     #ifdef MYDEBUG
@@ -499,8 +566,11 @@ void my_free(void * ptr)
 
   FREE_MEM_BLOCK * search_block = mem_list_head;
 
+  // Search for two free blocks containing the malloced block
   if((size_t)search_block >= (size_t)ptr)
   {
+    // This means the malloced block is at the beginning
+    // prior to any FREE_MEM_BLOCK
     prev_free_block = NULL;
     next_free_block = search_block;
   }
@@ -529,6 +599,8 @@ void my_free(void * ptr)
 
   size_t size = alloced_mem_block_to_be_free -> size;
   //char * data = alloced_mem_block_to_be_free -> data;
+
+  // Now create a new FREE_MEM_BLOCK right at "ptr"
   FREE_MEM_BLOCK * converted_free_mem_block = (FREE_MEM_BLOCK * )ptr;
   converted_free_mem_block -> size = size - sizeof(FREE_MEM_BLOCK);
   converted_free_mem_block -> prev = prev_free_block;
