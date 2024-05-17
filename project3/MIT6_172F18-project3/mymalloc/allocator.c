@@ -76,8 +76,8 @@ typedef struct alloced_mem_block ALLOC_MEM_BLOCK;
 struct alloced_mem_block
 {
   size_t size;
-  FREE_MEM_BLOCK * next;
-  FREE_MEM_BLOCK * prev;
+  // FREE_MEM_BLOCK * next;
+  // FREE_MEM_BLOCK * prev;
   char * data;
 };
 
@@ -93,6 +93,11 @@ struct alloced_mem_block
 // heap.
 int my_check() 
 {
+
+  #ifdef MYDEBUG
+    printf("~~~~~~~~~~~~~~~~~~ Inside check function ~~~~~~~~~~~~~~~~\n");
+  #endif
+
   char* p;
   char* lo = (char*)mem_heap_lo();
   char* hi = (char*)mem_heap_hi() + 1;
@@ -107,10 +112,54 @@ int my_check()
   if (p != hi) {
     printf("Bad headers did not end at heap_hi!\n");
     printf("heap_lo: %p, heap_hi: %p, size: %lu, p: %p\n", lo, hi, size, p);
+
+    #ifdef MYDEBUG
+      printf("~~~~~~~~~~~~~~~~~~ Inside check function ~~~~~~~~~~~~~~~~\n");
+    #endif
+
     return -1;
   }
 
+  #ifdef MYDEBUG
+    printf("~~~~~~~~~~~~~~~~~~ Outside check function ~~~~~~~~~~~~~~~~\n");
+  #endif
+
   return 0;
+}
+
+void check_the_whole_list()
+{
+  printf("~~~~~~~~~~~~~~~~~~ Inside check_the_whole_list function ~~~~~~~~~~~~~~~~\n");
+  FREE_MEM_BLOCK * fast = mem_list_head;
+  FREE_MEM_BLOCK * slow = mem_list_head;
+  while(fast != NULL && slow != NULL)
+  {
+    fast = fast -> next;
+    if(fast == NULL)
+    {
+      break;
+    }
+    fast = fast -> next;
+    slow = slow -> next;
+    if(fast == NULL || slow == NULL)
+    {
+      break;
+    }
+    assert(fast != slow);
+  }
+
+  printf("Finish check 1\n");
+
+  FREE_MEM_BLOCK * pointer2Block = mem_list_head;
+  while(pointer2Block != NULL)
+  {
+    assert(pointer2Block -> prev != pointer2Block && pointer2Block -> next != pointer2Block);
+    pointer2Block = pointer2Block -> next;
+  }
+
+  printf("Finish check 2\n");
+
+  printf("~~~~~~~~~~~~~~~~~~ Outside check_the_whole_list function ~~~~~~~~~~~~~~~~\n");
 }
 
 // init - Initialize the malloc package.  Called once before any other
@@ -153,6 +202,14 @@ int my_init()
 //  Always allocate a block whose size is a multiple of the alignment.
 void* my_malloc(size_t size) 
 {
+
+  // DEBUGING
+  #ifdef MYDEBUG
+    printf("~~~~~~~~~~~~~~~~~~ Inside my_malloc function ~~~~~~~~~~~~~~~~\n");
+    check_the_whole_list();
+  #endif
+  // DEBUGING
+
   // We allocate a little bit of extra memory so that we can store the
   // size of the block we've allocated.  Take a look at realloc to see
   // one example of a place where this can come in handy.
@@ -160,7 +217,8 @@ void* my_malloc(size_t size)
   // Here, I store the size of this block and 
   // a pointer to the previous free FREE_MEM_BLOCK node 
   // in order to facilitate the "free" function
-  int aligned_size = ALIGN(size + SIZE_T_SIZE + 2 * sizeof(FREE_MEM_BLOCK *));
+  //int aligned_size = ALIGN(size + sizeof(size_t) + 2 * sizeof(FREE_MEM_BLOCK *));
+  int aligned_size = ALIGN(size + SIZE_T_SIZE);
 
   /* ~~~~~~~~~~~~~~ Newly Added ~~~~~~~~~~~~*/
 
@@ -176,7 +234,7 @@ void* my_malloc(size_t size)
     #endif
     // DEBUGING
 
-    if(pointer2Block -> size > aligned_size)
+    if(pointer2Block -> size >= aligned_size)
     {
       // This means I find a free block which can contain the newly 
       // demanded memory
@@ -224,10 +282,26 @@ void* my_malloc(size_t size)
 
     new_block -> size = pointer2Block -> size - aligned_size;
     new_block -> next = pointer2Block -> next;
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish 1\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
+
     assert(new_block != new_block -> next);
     new_block -> prev = pointer2Block -> prev;
-    // Now set the new_block information
 
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish 2\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
+
+    assert(new_block != new_block -> prev);
+    // Now set the new_block information
 
     if(new_block -> prev != NULL)
     {
@@ -235,22 +309,58 @@ void* my_malloc(size_t size)
       new_block -> prev -> next = new_block;
     }
 
+    assert(new_block != new_block -> next);
+
     if(new_block -> next != NULL)
     {
+      assert(new_block != new_block -> next);
+      assert(new_block -> next != new_block -> next -> prev);
+      assert(new_block -> next != new_block -> prev);
+
       new_block -> next -> prev = new_block;
+      assert(new_block != new_block -> next);
+      assert(new_block -> next != new_block -> prev);
     }
+
+    assert(new_block != new_block -> next);
+
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish 3\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
 
     if(flag_head)
     {
       // Remember to renew the head block if needed
       mem_list_head = new_block;
+      assert(mem_list_head -> prev == NULL);
+      assert(mem_list_head != mem_list_head -> next);
     }
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish 5\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
 
     if(flag_tail)
     {
       // Remember to renew the tail block if needed
       mem_list_tail = new_block;
+      assert(mem_list_tail -> next == NULL);
     }
+
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("Finish 6\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
 
 
     // DEBUGING
@@ -306,9 +416,11 @@ void* my_malloc(size_t size)
     if(mem_list_head == mem_list_tail)
     {
       mem_list_head = new_block; 
+      assert(mem_list_head -> prev == NULL);
     }
 
     mem_list_tail = new_block;
+    assert(mem_list_tail -> next == NULL);
     // Change the information and maintain the head / tail of the list
 
     // DEBUGING
@@ -325,6 +437,14 @@ void* my_malloc(size_t size)
   {
     // Whoops, an error of some sort occurred.  We return NULL to let
     // the client code know that we weren't able to allocate memory.
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("~~~~~~~~~~~~~~~~~~ Outside my_malloc function ~~~~~~~~~~~~~~~~\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
+
     return NULL;
   } 
   else 
@@ -342,9 +462,17 @@ void* my_malloc(size_t size)
 
     ALLOC_MEM_BLOCK * newly_alloced_block = (ALLOC_MEM_BLOCK * )pointer2Block;
     newly_alloced_block -> size = aligned_size;
-    newly_alloced_block -> prev = pointer2Block -> prev;
-    newly_alloced_block -> next = new_block;
+    // newly_alloced_block -> prev = pointer2Block -> prev;
+    // newly_alloced_block -> next = new_block;
     newly_alloced_block -> data = (char * )&(newly_alloced_block -> data);
+
+    // DEBUGING
+    #ifdef MYDEBUG
+      printf("~~~~~~~~~~~~~~~~~~ Outside my_malloc function ~~~~~~~~~~~~~~~~\n");
+      check_the_whole_list();
+    #endif
+    // DEBUGING
+
     return (void*)(newly_alloced_block -> data);
   }
 }
@@ -354,9 +482,51 @@ void* my_malloc(size_t size)
 // Then just add a new block_node to the free list
 void my_free(void * ptr) 
 {
+
+  // DEBUGING
+  #ifdef MYDEBUG
+    printf("~~~~~~~~~~~~~~~~~~ Inside my_free function ~~~~~~~~~~~~~~~~\n");
+    check_the_whole_list();
+  #endif
+  // DEBUGING
+
   ALLOC_MEM_BLOCK * alloced_mem_block_to_be_free = (ALLOC_MEM_BLOCK * )ptr;
-  FREE_MEM_BLOCK * prev_free_block = alloced_mem_block_to_be_free -> prev;
-  FREE_MEM_BLOCK * next_free_block = alloced_mem_block_to_be_free -> next;
+  // FREE_MEM_BLOCK * prev_free_block = alloced_mem_block_to_be_free -> prev;
+  // FREE_MEM_BLOCK * next_free_block = alloced_mem_block_to_be_free -> next;
+
+  FREE_MEM_BLOCK * prev_free_block;
+  FREE_MEM_BLOCK * next_free_block;
+
+  FREE_MEM_BLOCK * search_block = mem_list_head;
+
+  if((size_t)search_block >= (size_t)ptr)
+  {
+    prev_free_block = NULL;
+    next_free_block = search_block;
+  }
+  else
+  {
+    while(search_block -> next != NULL)
+    {
+      // DEBUGING
+      #ifdef MYDEBUG
+        printf("Searching for the free blocks containing this memory block\n");
+      #endif
+      // DEBUGING
+
+      assert(search_block != search_block -> next);
+      if((size_t)search_block < (size_t)ptr && (size_t)search_block -> next > (size_t)ptr)
+      {
+        break;
+      }
+      search_block = search_block -> next;
+    }
+
+    prev_free_block = search_block;
+    next_free_block = search_block -> next;
+  }
+  
+
   size_t size = alloced_mem_block_to_be_free -> size;
   //char * data = alloced_mem_block_to_be_free -> data;
   FREE_MEM_BLOCK * converted_free_mem_block = (FREE_MEM_BLOCK * )ptr;
@@ -367,12 +537,31 @@ void my_free(void * ptr)
   if(prev_free_block == NULL)
   {
     mem_list_head = converted_free_mem_block;
+    assert(converted_free_mem_block -> prev == NULL);
   }
 
   if(next_free_block == NULL)
   {
     mem_list_tail = converted_free_mem_block;
+    assert(converted_free_mem_block -> next == NULL);
+  } 
+
+  if(prev_free_block != NULL)
+  {
+    prev_free_block -> next = converted_free_mem_block;
   }
+  if(next_free_block != NULL)
+  {
+    next_free_block -> prev = converted_free_mem_block;
+  }
+
+  // DEBUGING
+  #ifdef MYDEBUG
+    printf("~~~~~~~~~~~~~~~~~~ Outside my_free function ~~~~~~~~~~~~~~~~\n");
+    check_the_whole_list();
+  #endif
+  // DEBUGING
+
 }
 
 // realloc - Implemented simply in terms of malloc and free
