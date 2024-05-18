@@ -127,4 +127,254 @@ void* my_malloc(size_t size) {
 因此我很自然的一个改进方法就是， 我维护一个 free list， 然后每次找 first fit 的块。
 
 
-进度 : 写完了 init / malloc， 明天写 free。
+### 主体代码
+
+我给我的代码写了很详尽的注释：
+
+#### init
+
+```cpp
+int my_init()
+{
+  mem_sbrk(ALIGN(sizeof(FREE_MEM_BLOCK)));
+  mem_list_head = (FREE_MEM_BLOCK * )mem_heap_lo();
+  // I will locate any block_node at the beginning of this free memory block
+  // Notice that the block_node itself takes memory
+
+  mem_sbrk(ALIGNMENT * INIT_SIZE);
+  mem_list_head -> size = ALIGNMENT * INIT_SIZE;
+  mem_list_head -> next = NULL;
+  mem_list_head -> prev = NULL;
+  mem_list_tail = mem_list_head;
+  // Allocate the initial size of the heap
+  // And let the first node to be the head & tail of the list
+
+  return 0;
+}
+```
+
+#### malloc
+
+```cpp
+//  malloc - Allocate a block by incrementing the brk pointer.
+//  Always allocate a block whose size is a multiple of the alignment.
+void* my_malloc(size_t size) 
+{
+
+  // We allocate a little bit of extra memory so that we can store the
+  // size of the block we've allocated.  Take a look at realloc to see
+  // one example of a place where this can come in handy.
+
+  // Here, I store the size of this block and 
+  // a pointer to the previous free FREE_MEM_BLOCK node 
+  // in order to facilitate the "free" function
+  //int aligned_size = ALIGN(size + sizeof(size_t) + 2 * sizeof(FREE_MEM_BLOCK *));
+  size_t aligned_size = ALIGN(size + SIZE_T_SIZE);
+
+  /* ~~~~~~~~~~~~~~ Newly Added ~~~~~~~~~~~~*/
+
+  //search for a free block in the free list
+  //if there's no such block, allocate it
+  FREE_MEM_BLOCK * pointer2Block = mem_list_head;
+  while(pointer2Block != NULL)
+  {
+    if(pointer2Block -> size > aligned_size)
+    {
+      // This means I find a free block which can contain the newly 
+      // demanded memory
+      break;
+    }
+
+    assert(pointer2Block != pointer2Block -> next);
+
+    pointer2Block = pointer2Block -> next;
+  }
+  FREE_MEM_BLOCK * new_block;
+
+  if(pointer2Block != NULL)
+  {
+    // This means that we can find a suitable block
+    char flag_head = pointer2Block == mem_list_head;
+    // flag_head will record if it's the head of the list
+    // If so, we have to renew the head of the list
+
+    char flag_tail = pointer2Block == mem_list_tail;
+
+    new_block = (FREE_MEM_BLOCK * )((char * )pointer2Block + aligned_size);
+    // Now I will place the new memory block node at "(char * )pointer2Block + aligned_size"
+    // Notice that "aligned_size" is the number of BYTE!!!
+    // Thus I have to cast "pointer2Block" to be char * and then increment it
+    // Otherwise, pointer2Block will increment (aligned_size * sizeof(FREE_MEM_BLOCK))
+    // which is definitely wrong!!!
+
+    assert(pointer2Block != pointer2Block -> next);
+    assert(pointer2Block != new_block);
+
+    new_block -> next = pointer2Block -> next; 
+    new_block -> prev = pointer2Block -> prev;
+
+    if(new_block -> next != NULL)
+    {
+      assert(new_block -> next != new_block -> next -> prev);
+    }
+    // Now set the new_block information
+
+    if(new_block -> prev != NULL)
+    {
+      // Add this condition in case it's the head block
+      new_block -> prev -> next = new_block;
+    }
+    assert(new_block != new_block -> next);
+
+    if(new_block -> next != NULL)
+    {
+      new_block -> next -> prev = new_block;
+    }
+
+    assert(new_block != new_block -> next);
+    if(flag_head)
+    {
+      // Remember to renew the head block if needed
+      mem_list_head = new_block;
+      assert(mem_list_head -> prev == NULL);
+      assert(mem_list_head != mem_list_head -> next);
+    }
+    if(flag_tail)
+    {
+      // Remember to renew the tail block if needed
+      mem_list_tail = new_block;
+      assert(mem_list_tail -> next == NULL);
+    }
+  }
+  else
+  {
+    // This means that we have to allocate more memory
+    // Now I decide to double the size of the heap
+    // This strategy will amortize the time complexity
+
+    size_t aligned_heap_size = ALIGN((my_heap_hi() - my_heap_lo() + 1) / 2) + aligned_size;
+    // Get the aligned version of the size of the heap
+
+    mem_sbrk(aligned_heap_size);
+    mem_list_tail -> size += aligned_heap_size;
+    pointer2Block = mem_list_tail;
+    // expand the heap and renew the tail block information
+    // Notice that there maybe some oppotunity for optimization here
+    // To reduce the number of operations
+
+    //Create a new FREE_MEM_BLOCK at the right location
+    new_block = (FREE_MEM_BLOCK * )((char * )pointer2Block + aligned_size);
+    new_block -> size = pointer2Block -> size - aligned_size;
+
+    new_block -> next = pointer2Block -> next;
+    assert(new_block -> next == NULL);
+    new_block -> prev = pointer2Block -> prev;
+
+    if(new_block -> prev != NULL)
+    {
+      new_block -> prev -> next = new_block;
+    }
+    if(new_block -> next != NULL)
+    {
+      new_block -> next -> prev = new_block;
+    }
+
+    if(mem_list_head == mem_list_tail)
+    {
+      mem_list_head = new_block; 
+      assert(mem_list_head -> prev == NULL);
+    }
+
+    mem_list_tail = new_block;
+    assert(mem_list_tail -> next == NULL);
+    // Change the information and maintain the head / tail of the list
+  }
+
+  if ((void *)pointer2Block == (void*) - 1) 
+  {
+    // Whoops, an error of some sort occurred.  We return NULL to let
+    // the client code know that we weren't able to allocate memory.
+    return NULL;
+  } 
+  else 
+  {
+    ALLOC_MEM_BLOCK * newly_alloced_block = (ALLOC_MEM_BLOCK * )pointer2Block;
+    newly_alloced_block -> size = aligned_size;
+    newly_alloced_block -> data = (char * )&(newly_alloced_block -> data);
+
+    return (void*)(newly_alloced_block -> data);
+  }
+}
+```
+
+#### free
+
+```cpp
+// free a memory block
+// I have already store the size of the block in the first SIZE_T_SIZE bytes
+// Then just add a new block_node to the free list
+void my_free(void * ptr) 
+{
+  ALLOC_MEM_BLOCK * alloced_mem_block_to_be_free = (ALLOC_MEM_BLOCK * )ptr;
+
+    // Now create a new FREE_MEM_BLOCK right at "ptr"
+  FREE_MEM_BLOCK * converted_free_mem_block = (FREE_MEM_BLOCK * )ptr;
+
+  FREE_MEM_BLOCK * prev_free_block;
+  FREE_MEM_BLOCK * next_free_block;
+
+  FREE_MEM_BLOCK * search_block = mem_list_head;
+
+  // Search for two free blocks containing the malloced block
+  if(search_block >= converted_free_mem_block)
+  {
+    // This means the malloced block is at the beginning
+    // prior to any FREE_MEM_BLOCK
+    prev_free_block = NULL;
+    next_free_block = search_block;
+  }
+  else
+  {
+    while(search_block -> next != NULL)
+    {
+      assert(search_block != search_block -> next);
+      if(search_block < converted_free_mem_block && search_block -> next > converted_free_mem_block)
+      {
+        break;
+      }
+      search_block = search_block -> next;
+    }
+
+    prev_free_block = search_block;
+    next_free_block = search_block -> next;
+  }
+
+  size_t size = alloced_mem_block_to_be_free -> size;
+
+  // Now I will create a branch new FREE_MEM_BLOCK
+  // at "converted_free_mem_block".
+  converted_free_mem_block -> size = size - ALIGN(sizeof(FREE_MEM_BLOCK));
+  converted_free_mem_block -> prev = prev_free_block;
+  converted_free_mem_block -> next = next_free_block;
+
+    //And I maintain the free memory block linked list
+  if(prev_free_block == NULL)
+  {
+    mem_list_head = converted_free_mem_block;
+    assert(converted_free_mem_block -> prev == NULL);
+  }
+  if(next_free_block == NULL)
+  {
+    mem_list_tail = converted_free_mem_block;
+    assert(converted_free_mem_block -> next == NULL);
+  } 
+  if(prev_free_block != NULL)
+  {
+    prev_free_block -> next = converted_free_mem_block;
+  }
+  if(next_free_block != NULL)
+  {
+    next_free_block -> prev = converted_free_mem_block;
+  }
+}
+```
