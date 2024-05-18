@@ -258,7 +258,6 @@ void* my_malloc(size_t size)
   //if there's no such block, allocate it
   FREE_MEM_BLOCK * pointer2Block = mem_list_head;
   while(pointer2Block != NULL)
-
   {
     // DEBUGING
     #ifdef MYDEBUG
@@ -639,6 +638,16 @@ void my_free(void * ptr)
 // realloc - Implemented simply in terms of malloc and free
 void* my_realloc(void* ptr, size_t size) 
 {
+  if(ptr == NULL)
+  {
+    return my_malloc(size);
+  }
+  if(size == 0)
+  {
+    my_free(ptr);
+    return NULL;
+  }
+
   void* newptr;
   size_t copy_size;
 
