@@ -50,9 +50,15 @@ substantial performance improvement.
 
 `doc/engine-interface.txt`： 介绍了可以发送给游戏的命令行指令。
 
-## 项目还挺大的， 如何下手？
 
-这里官方文档给了一些建议， 实际上这也是性能调优经常遇到的问题: 如何抓住首要优化点。
+#### cilk 部分
 
+建议把 cilk 相关的编译参数和头文件都删掉。 新版 clang 好像已经不兼容了。
+
+#### webserver
+
+首先， 这个 `webserver.py` 的 python 的语法都是老版本的， 我对它做了更新适配最新的 python 解释器。 然后不知道为什么， 我的 webserver 还是跑不起来。 我觉得可能是因为这个 project 确实有年头了。
+
+所幸测试程序没有坏掉， 所以可能只能本地在终端测试， 没办法看到图形化界面的实时效果了。
 
 
